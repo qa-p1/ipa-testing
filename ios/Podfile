@@ -1,7 +1,69 @@
-platform :ios, '12.0'
+# platform :ios, '11.0' # Flutter's default minimum, but '12.0' or '13.0' is safer for modern plugins.
+platform :ios, '13.0'  # Let's use a more current common minimum.
 
-use_frameworks!
+# CocoaPods analytics sends network requests to stats.cocoapods.org,
+# and you may see errors if you are behind a proxy or firewall.
+# If you are encountering issues, uncomment the following line.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
 
 target 'Runner' do
-  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  # If you're using Swift pods or frameworks, you might need to uncomment this.
+  # Firebase and image_cropper often benefit from or require this.
+  use_frameworks!
+
+  # Firebase and other modern libraries often require this for proper module imports.
+  # Flutter typically adds this automatically if Firebase plugins are detected.
+  use_modular_headers!
+
+  # This is the core line that tells CocoaPods to install pods for all
+  # Flutter plugins that have iOS native components.
+  # It references a helper script provided by Flutter.
+  # Make sure the path correctly points to your Flutter application root from the `ios` directory.
+  flutter_application_path = File.expand_path('..', __dir__) # This goes one level up from `ios` to your project root
+  load File.join(flutter_application_path, '.ios', 'Flutter', 'podhelper.rb')
+
+  # --- DO NOT MANUALLY ADD PLUGIN PODS HERE ---
+  # flutter_install_all_ios_pods(flutter_application_path) defined in podhelper.rb
+  # will handle pods for:
+  # - firebase_core
+  # - firebase_auth
+  # - cloud_firestore
+  # - google_sign_in
+  # - image_picker
+  # - image_cropper
+  # and any other plugins with iOS implementations.
+
+  # If you have any *custom* native iOS code that requires its own pods (not part of a Flutter plugin),
+  # you would add them here. For example:
+  # pod 'MyCustomNativeDependency'
+
+  # For image_cropper, it might bring in 'Swift решений' or other dependencies.
+  # The `use_frameworks!` and `use_modular_headers!` are usually sufficient.
+
+end
+
+# This post_install block is often added by Flutter or needed for specific configurations.
+# It helps ensure build settings are correctly applied.
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target) # Applies Flutter-specific build settings
+
+    # Set a consistent deployment target for all pods
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0' # Match the platform version above
+
+      # Common workaround for build issues on ARM64 simulators (Apple Silicon Macs)
+      # or for projects with mixed Objective-C/Swift and older build systems.
+      # This excludes arm64 architecture for simulators, forcing them to run under Rosetta 2 if needed.
+      # You can try commenting this out if your CI runner is Intel-based and you still have issues,
+      # or if all your dependencies are fully arm64 simulator compatible.
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64 i386'
+    end
+  end
 end

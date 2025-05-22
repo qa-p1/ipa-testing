@@ -1,42 +1,72 @@
 name: iOS-ipa-build
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
   build-ios:
     name: 🎉 iOS Build
-    runs-on: macos-latest
+    runs-on: macos-latest # Good default, consider macos-12 or macos-13 if specific Xcode is needed
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - uses: subosito/flutter-action@v2
+      - name: Set up Ruby (for CocoaPods)
+        uses: ruby/setup-ruby@v1
         with:
-          channel: 'stable'
-          architecture: x64
-      - run: flutter pub get
-      
+          ruby-version: '2.7' # Or '3.0', '3.1' - ensure compatibility with CocoaPods version
 
-      - run: pod repo update
-        working-directory: ios
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable' # Or specify a version e.g., '3.16.x'
+          architecture: x64 # This is usually fine for macOS runners
+          cache: true       # Enable Flutter SDK and pub cache
 
-      - run: flutter build ios --release --no-codesign
+      - name: Get Flutter packages
+        run: flutter pub get
 
-      - run: mkdir Payload
-        working-directory: build/ios/iphoneos
+      # --- CocoaPods Installation ---
+      - name: Install CocoaPods
+        run: gem install cocoapods
+        # You could also cache gems if build times are long, but often not a huge gain for just cocoapods
 
-      - run: mv Runner.app/ Payload
-        working-directory: build/ios/iphoneos
+      - name: Update Pod Repo (Optional but Recommended for Freshness)
+        run: pod repo update
+        working-directory: ios # Run this command inside the ios directory
 
-      - name: Zip output
-        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
-        working-directory: build/ios/iphoneos
+      - name: Install iOS Dependencies (CocoaPods)
+        run: pod install --repo-update # --repo-update ensures it uses updated specs
+        working-directory: ios # This command MUST be run inside the ios directory
 
-      - name: Upload binaries to release
+      # --- Flutter Build ---
+      - name: Build iOS App (Release mode, no codesign for CI artifact)
+        run: flutter build ios --release --no-codesign
+
+      # --- Create .ipa ---
+      # The following steps create a basic .ipa. For App Store submission,
+      # you'd typically use Xcode's archive and export process (flutter build ipa).
+      # But for a CI artifact, this is often sufficient.
+
+      - name: Create Payload directory
+        run: mkdir build/ios/iphoneos/Payload
+        # No working-directory needed here if paths are absolute from root or relative to root
+
+      - name: Move Runner.app into Payload
+        run: mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/Runner.app
+        # Ensure correct paths
+
+      - name: Zip Payload to create .ipa
+        run: |
+          cd build/ios/iphoneos
+          zip -qq -r -9 FlutterIpaExport.ipa Payload
+        # Changed to cd into the directory for simpler zip command
+
+      - name: Upload .ipa to Release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/ios/iphoneos/FlutterIpaExport.ipa
-          tag: v1.0
+          tag: v1.0 # Consider making this dynamic (e.g., based on git tag or run number)
           overwrite: true
-          body: "This is first release"
+          # body: "This is the first release" # Optional: Customize release body
